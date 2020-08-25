@@ -27,13 +27,15 @@ import (
 	cosiapi "github.com/container-object-storage-interface/api/apis/cosi.sigs.k8s.io/v1alpha1"
 	cosiclient "github.com/container-object-storage-interface/api/clientset"
 	cosiinformer "github.com/container-object-storage-interface/api/informers/externalversions"
-	"golang.org/x/time/rate"
+
 	v1 "k8s.io/api/core/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	"k8s.io/apimachinery/pkg/util/uuid"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/util/wait"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/kubernetes/scheme"
 	corev1 "k8s.io/client-go/kubernetes/typed/core/v1"
@@ -43,6 +45,8 @@ import (
 	"k8s.io/client-go/tools/record"
 	"k8s.io/client-go/util/workqueue"
 	glog "k8s.io/klog"
+
+	"golang.org/x/time/rate"
 )
 
 // annClass annotation represents the bucket class associated with a resource:

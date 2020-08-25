@@ -14,12 +14,13 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package server
+package grpcserver
 
 import (
 	"fmt"
 
 	"github.com/container-object-storage-interface/spec/lib/go/cosi"
+
 	"github.com/golang/glog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
@@ -33,7 +34,7 @@ type DriverServer struct {
 func (ds *DriverServer) ProvisionerGetInfo(context.Context, *cosi.ProvisionerGetInfoRequest) (*cosi.ProvisionerGetInfoResponse, error) {
 	rsp := &cosi.ProvisionerGetInfoResponse{}
 	rsp.ProvisionerIdentity = fmt.Sprintf("%s-%s", ds.Name, ds.Version)
-	return rsp, nil 
+	return rsp, nil
 }
 
 func (ds DriverServer) ProvisionerCreateBucket(ctx context.Context, req *cosi.ProvisionerCreateBucketRequest) (*cosi.ProvisionerCreateBucketResponse, error) {

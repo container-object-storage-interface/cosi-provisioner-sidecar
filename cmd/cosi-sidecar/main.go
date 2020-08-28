@@ -28,6 +28,13 @@ import (
 	"strings"
 	"time"
 
+	cosiclient "github.com/container-object-storage-interface/api/clientset"
+
+	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/controller"
+	ctrl "github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/provisioner"
+
+	cosispec "github.com/container-object-storage-interface/spec"
+
 	"google.golang.org/grpc"
 	"k8s.io/apimachinery/pkg/util/wait"
 	"k8s.io/client-go/informers"
@@ -35,12 +42,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 	"k8s.io/client-go/util/workqueue"
-	"k8s.io/klog"
 
-	cosiclient "github.com/container-object-storage-interface/api/clientset"
-	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/cosi-provisioner/controller"
-	ctrl "github.com/container-object-storage-interface/cosi-provisioner-sidecar/cosi-provisioner/pkg/provisioner"
-	"github.com/container-object-storage-interface/spec/lib/go/cosi"
+	"k8s.io/klog"
 )
 
 const (
@@ -115,13 +118,13 @@ func main() {
 	defer cancel()
 
 	klog.V(1).Infof("Creating COSI client")
-	client := cosi.NewProvisionerClient(cosiConn)
+	client := cosispec.NewProvisionerClient(cosiConn)
 
 	klog.Infof("Calling COSI driver to discover driver name")
-	req := cosi.ProvisionerGetInfoRequest{}
+	req := cosispec.ProvisionerGetInfoRequest{}
 	rsp, err := client.ProvisionerGetInfo(ctx, &req)
 	if err != nil {
-		klog.Errorf("error calling COSI cosi.ProvisionerGetInfoRequest: %v", err)
+		klog.Errorf("error calling COSI cosispec.ProvisionerGetInfoRequest: %v", err)
 		os.Exit(1)
 	}
 	provisionerName = rsp.ProvisionerIdentity

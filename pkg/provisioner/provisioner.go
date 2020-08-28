@@ -21,17 +21,20 @@ import (
 	"time"
 
 	"github.com/container-object-storage-interface/api/apis/cosi.sigs.k8s.io/v1alpha1"
+	cosiclient "github.com/container-object-storage-interface/api/clientset"
+
+	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/controller"
+
+	"github.com/container-object-storage-interface/spec/lib/go/cosi"
 
 	_ "k8s.io/apimachinery/pkg/util/json"
+
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
+
 	"k8s.io/klog"
 
 	"google.golang.org/grpc"
-
-	cosiclient "github.com/container-object-storage-interface/api/clientset"
-	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/cosi-provisioner/controller"
-	"github.com/container-object-storage-interface/spec/lib/go/cosi"
 )
 
 const (
@@ -68,7 +71,7 @@ const (
 type cosiProvisioner struct {
 	client        kubernetes.Interface
 	cosiInterface cosiclient.Interface
-	cosiClient    cosi.ProvisionerClient
+	cosiClient    cosi.CosiControllerClient
 	grpcClient    *grpc.ClientConn
 	timeout       time.Duration
 	identity      string
@@ -94,7 +97,7 @@ func NewBucketProvisioner(client kubernetes.Interface,
 	driverName string,
 ) controller.BucketProvisioner {
 
-	cosiClient := cosi.NewProvisionerClient(grpcClient)
+	cosiClient := cosi.NewCosiControllerClient(grpcClient)
 
 	provisioner := &cosiProvisioner{
 		client:        client,
@@ -117,7 +120,7 @@ func NewBucketAccessProvisioner(client kubernetes.Interface,
 	driverName string,
 ) controller.BucketAccessProvisioner {
 
-	cosiClient := cosi.NewProvisionerClient(grpcClient)
+	cosiClient := cosi.NewCosiControllerClient(grpcClient)
 
 	provisioner := &cosiProvisioner{
 		client:        client,
@@ -133,9 +136,9 @@ func NewBucketAccessProvisioner(client kubernetes.Interface,
 
 func (p *cosiProvisioner) CreateBucket(ctx context.Context, options controller.BucketProvisionOptions) (*v1alpha1.Bucket, controller.ProvisioningState, error) {
 	klog.V(1).Infof("Calling COSI driver to create bucket")
-	client := cosi.NewProvisionerClient(p.grpcClient)
-	req := cosi.ProvisionerCreateBucketRequest{}
-	rsp, err := client.ProvisionerCreateBucket(ctx, &req)
+	client := cosi.NewCosiControllerClient(p.grpcClient)
+	req := cosi.CreateBucketRequest{}
+	rsp, err := client.CreateBucket(ctx, &req)
 	if err != nil {
 		klog.Errorf("error calling COSI cosi.ProvisionerGetInfoRequest: %v", err)
 	}

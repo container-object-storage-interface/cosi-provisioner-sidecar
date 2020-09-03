@@ -12,7 +12,7 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 
-CMDS=cosi-sidecar
+CMDS=object-storage-sidecar
 all: build
 
 include release-tools/build.make

@@ -507,13 +507,13 @@ func (ctrl *ProvisionController) processNextBucketWorkItem() bool {
 
 		if err := ctrl.syncBucketHandler(context.TODO(), key); err != nil {
 			if ctrl.failedProvisionThreshold == 0 {
-				fmt.Sprintf("Retrying syncing bucket %q, failure %v", key, ctrl.bucketQueue.NumRequeues(obj))
+				fmt.Printf("Retrying syncing bucket %q, failure %v", key, ctrl.bucketQueue.NumRequeues(obj))
 				ctrl.bucketQueue.AddRateLimited(obj)
 			} else if ctrl.bucketQueue.NumRequeues(obj) < ctrl.failedProvisionThreshold {
-				fmt.Sprintf("Retrying syncing bucket %q because failures %v < threshold %v", key, ctrl.bucketQueue.NumRequeues(obj), ctrl.failedProvisionThreshold)
+				fmt.Printf("Retrying syncing bucket %q because failures %v < threshold %v", key, ctrl.bucketQueue.NumRequeues(obj), ctrl.failedProvisionThreshold)
 				ctrl.bucketQueue.AddRateLimited(obj)
 			} else {
-				fmt.Sprintf("Giving up syncing bucket %q because failures %v >= threshold %v", key, ctrl.bucketQueue.NumRequeues(obj), ctrl.failedProvisionThreshold)
+				fmt.Printf("Giving up syncing bucket %q because failures %v >= threshold %v", key, ctrl.bucketQueue.NumRequeues(obj), ctrl.failedProvisionThreshold)
 				glog.V(2).Infof("Removing Bucket %s from buckets in progress", key)
 				// Done but do not Forget: it will not be in the queue but NumRequeues
 				// will be saved until the obj is deleted from kubernetes
@@ -700,8 +700,6 @@ func (ctrl *ProvisionController) syncBucketAccess(ctx context.Context, obj inter
 		}
 		return err
 	}
-	return nil
-
 	return nil
 }
 

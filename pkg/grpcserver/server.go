@@ -28,7 +28,7 @@ import (
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
-	"github.com/container-object-storage-interface/spec/lib/go/cosi"
+	cosi "github.com/container-object-storage-interface/spec"
 )
 
 // Defines Non blocking GRPC server interfaces

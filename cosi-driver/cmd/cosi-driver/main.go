@@ -25,8 +25,8 @@ import (
 	"google.golang.org/grpc"
 	"k8s.io/klog"
 
-	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/cosi-driver/pkg/server"
-	"github.com/container-object-storage-interface/spec/lib/go/cosi"
+	server "github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/grpcserver"
+	cosi "github.com/container-object-storage-interface/spec"
 )
 
 // Command line flags
@@ -59,7 +59,7 @@ func main() {
 	}
 	klog.Infof("Version: %s", version)
 
-	cds := server.DriverServer{"testDriver", "1.0"}
+	cds := server.DriverServer{Name: "testDriver", Version: "1.0"}
 	Serve(*cosiAddress, "default", &cds)
 }
 

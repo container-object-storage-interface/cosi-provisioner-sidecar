@@ -25,7 +25,7 @@ import (
 
 	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/controller"
 
-	"github.com/container-object-storage-interface/spec/lib/go/cosi"
+	cosi "github.com/container-object-storage-interface/spec"
 
 	_ "k8s.io/apimachinery/pkg/util/json"
 
@@ -71,7 +71,7 @@ const (
 type cosiProvisioner struct {
 	client        kubernetes.Interface
 	cosiInterface cosiclient.Interface
-	cosiClient    cosi.CosiControllerClient
+	cosiClient    cosi.ProvisionerClient
 	grpcClient    *grpc.ClientConn
 	timeout       time.Duration
 	identity      string
@@ -97,7 +97,7 @@ func NewBucketProvisioner(client kubernetes.Interface,
 	driverName string,
 ) controller.BucketProvisioner {
 
-	cosiClient := cosi.NewCosiControllerClient(grpcClient)
+	cosiClient := cosi.NewProvisionerClient(grpcClient)
 
 	provisioner := &cosiProvisioner{
 		client:        client,
@@ -120,7 +120,7 @@ func NewBucketAccessProvisioner(client kubernetes.Interface,
 	driverName string,
 ) controller.BucketAccessProvisioner {
 
-	cosiClient := cosi.NewCosiControllerClient(grpcClient)
+	cosiClient := cosi.NewProvisionerClient(grpcClient)
 
 	provisioner := &cosiProvisioner{
 		client:        client,
@@ -136,13 +136,13 @@ func NewBucketAccessProvisioner(client kubernetes.Interface,
 
 func (p *cosiProvisioner) CreateBucket(ctx context.Context, options controller.BucketProvisionOptions) (*v1alpha1.Bucket, controller.ProvisioningState, error) {
 	klog.V(1).Infof("Calling COSI driver to create bucket")
-	client := cosi.NewCosiControllerClient(p.grpcClient)
-	req := cosi.CreateBucketRequest{}
-	rsp, err := client.CreateBucket(ctx, &req)
+	req := cosi.ProvisionerCreateBucketRequest{}
+	rsp, err := p.cosiClient.ProvisionerCreateBucket(ctx, &req)
 	if err != nil {
 		klog.Errorf("error calling COSI cosi.ProvisionerGetInfoRequest: %v", err)
+		return nil, controller.ProvisioningNoChange, err
 	}
-	klog.Info("This provsioner returned createbucket response %v", rsp)
+	klog.Infof("The provisioner returned create bucket response %v", rsp)
 
 	bucket := options.Bucket
 

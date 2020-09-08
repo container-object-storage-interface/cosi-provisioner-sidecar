@@ -19,7 +19,7 @@ package grpcserver
 import (
 	"fmt"
 
-	"github.com/container-object-storage-interface/spec/lib/go/cosi"
+	cosi "github.com/container-object-storage-interface/spec"
 
 	"github.com/golang/glog"
 	"golang.org/x/net/context"

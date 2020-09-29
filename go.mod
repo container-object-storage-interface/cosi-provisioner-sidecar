@@ -8,6 +8,8 @@ require (
 	github.com/container-object-storage-interface/spec v0.0.0-20200908192509-18912d8bf2a5
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
 	github.com/kubernetes-csi/csi-lib-utils v0.7.0
+	github.com/spf13/cobra v0.0.5
+	github.com/spf13/viper v1.3.2
 	golang.org/x/net v0.0.0-20200904194848-62affa334b73
 	golang.org/x/time v0.0.0-20190308202827-9d24e82272b4
 	google.golang.org/grpc v1.31.1

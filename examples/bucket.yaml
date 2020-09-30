@@ -1,14 +1,14 @@
-apiVersion: cosi.sigs.k8s.io/v1alpha1
+apiVersion: objectstorage.k8s.io/v1alpha1
 kind: Bucket
 metadata:
   name: testbucket
 spec:
   releasePolicy: "retain"
-  protocol: 
+  protocol:
     s3:
       bucketName: testbucket
       endpoint: http://abc.store.com
       region: us-west
       signatureVersion: "s3v2"
     protocolSignature: "s3"
-  provisioner: testprovisioner  
+  provisioner: testprovisioner

@@ -36,6 +36,8 @@ github.com/cncf/udpa/go v0.0.0-20191209042840-269d4d468f6f/go.mod h1:M8M6+tZqaGX
 github.com/cockroachdb/datadriven v0.0.0-20190809214429-80d97fb3cbaa/go.mod h1:zn76sxSg3SzpJ0PPJaLDCu+Bu0Lg3sKTORVIj19EIF8=
 github.com/container-object-storage-interface/api v0.0.0-20200811180640-700a0bdd7111 h1:EYmIrCEcpqMhDDsdoMS+NcHOwy0b/JQGMZwvZ+osGtM=
 github.com/container-object-storage-interface/api v0.0.0-20200811180640-700a0bdd7111/go.mod h1:wi7yf829qi/x2cm4XAXaRVMA4MoCQOBNizsVQjrDpBI=
+github.com/container-object-storage-interface/api v0.0.0-20200924013804-9290d9c83ae2 h1:Jx3rjcTpPM2TxAcT0omGZIxvkYJrw9IAKQHOSUi+i+U=
+github.com/container-object-storage-interface/api v0.0.0-20200924013804-9290d9c83ae2/go.mod h1:AGSCVuBrCT8Jm9KlJdMfzHgYsEEyEYKgKQtd2KnTFJ4=
 github.com/container-object-storage-interface/spec v0.0.0-20200908192509-18912d8bf2a5 h1:KeXXrmLIz9uzVrr5u6lsidGPs8yfY7u5yMOhg6A+Tlk=
 github.com/container-object-storage-interface/spec v0.0.0-20200908192509-18912d8bf2a5/go.mod h1:vZ12rK3/PIcgz6w5ul9EibzgxcjT6rC+bZGkhxkDs0w=
 github.com/container-storage-interface/spec v1.1.0/go.mod h1:6URME8mwIBbpVyZV93Ce5St17xBiQJQY67NDsuohiy4=

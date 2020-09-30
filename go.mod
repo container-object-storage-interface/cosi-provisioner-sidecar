@@ -3,7 +3,7 @@ module github.com/container-object-storage-interface/cosi-provisioner-sidecar/co
 go 1.14
 
 require (
-	github.com/container-object-storage-interface/api v0.0.0-20200811180640-700a0bdd7111
+	github.com/container-object-storage-interface/api v0.0.0-20200924013804-9290d9c83ae2
 	github.com/container-object-storage-interface/cosi-provisioner-sidecar v0.0.0-00010101000000-000000000000
 	github.com/container-object-storage-interface/spec v0.0.0-20200908192509-18912d8bf2a5
 	github.com/golang/glog v0.0.0-20160126235308-23def4e6c14b
@@ -18,3 +18,4 @@ require (
 )
 
 replace github.com/container-object-storage-interface/cosi-provisioner-sidecar => ./
+replace github.com/container-object-storage-interface/api => ../api

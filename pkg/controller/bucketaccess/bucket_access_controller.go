@@ -32,8 +32,7 @@ import (
 	"github.com/container-object-storage-interface/api/controller"
 	osspec "github.com/container-object-storage-interface/spec"
 
-	"github.com/golang/glog"
-	//"k8s.io/klog"
+	"k8s.io/klog"
 
 	"golang.org/x/time/rate"
 )
@@ -76,7 +75,7 @@ func (bal *bucketAccessListener) InitializeKubeClient(k kubeclientset.Interface)
 
 	serverVersion, err := k.Discovery().ServerVersion()
 	if err != nil {
-		glog.Errorf("unable to get server version: %v", err)
+		klog.Errorf("unable to get server version: %v", err)
 	} else {
 		bal.kubeVersion = utilversion.MustParseSemantic(serverVersion.GitVersion)
 	}
@@ -87,7 +86,7 @@ func (bal *bucketAccessListener) InitializeBucketClient(bc bucketclientset.Inter
 }
 
 func (bal *bucketAccessListener) Add(ctx context.Context, obj *v1alpha1.BucketAccess) error {
-	glog.V(1).Infof("bucketAccessListener: add called for bucket access %s", obj.Name)
+	klog.V(1).Infof("bucketAccessListener: add called for bucket access %s", obj.Name)
 
 	// Verify this bucket access is for this provisioner
 	if !strings.EqualFold(obj.Spec.Provisioner, bal.provisionerName) {
@@ -102,21 +101,21 @@ func (bal *bucketAccessListener) Add(ctx context.Context, obj *v1alpha1.BucketAc
 	// TODO set grpc timeout
 	rsp, err := bal.provisionerClient.ProvisionerGrantBucketAccess(ctx, &req)
 	if err != nil {
-		glog.Errorf("error calling ProvisionerGrantBucketAccess: %v", err)
+		klog.Errorf("error calling ProvisionerGrantBucketAccess: %v", err)
 		return err
 	}
-	glog.Infof("provisioner returned grant bucket access response %v", rsp)
+	klog.Infof("provisioner returned grant bucket access response %v", rsp)
 
 	return nil
 }
 
 func (bal *bucketAccessListener) Update(ctx context.Context, old, new *v1alpha1.BucketAccess) error {
-	glog.V(1).Infof("bucketAccessListener: update called for bucket %s", old.Name)
+	klog.V(1).Infof("bucketAccessListener: update called for bucket %s", old.Name)
 	return nil
 }
 
 func (bal *bucketAccessListener) Delete(ctx context.Context, obj *v1alpha1.BucketAccess) error {
-	glog.V(1).Infof("bucketAccessListener: delete called for bucket access %s", obj.Name)
+	klog.V(1).Infof("bucketAccessListener: delete called for bucket access %s", obj.Name)
 
 	// Verify this bucket access is for this provisioner
 	if !strings.EqualFold(obj.Spec.Provisioner, bal.provisionerName) {
@@ -131,10 +130,10 @@ func (bal *bucketAccessListener) Delete(ctx context.Context, obj *v1alpha1.Bucke
 	// TODO set grpc timeout
 	rsp, err := bal.provisionerClient.ProvisionerRevokeBucketAccess(ctx, &req)
 	if err != nil {
-		glog.Errorf("error calling ProvisionerRevokeBucketAccess: %v", err)
+		klog.Errorf("error calling ProvisionerRevokeBucketAccess: %v", err)
 		return err
 	}
-	glog.Infof("provisioner returned revoke bucket access response %v", rsp)
+	klog.Infof("provisioner returned revoke bucket access response %v", rsp)
 
 	return nil
 }

@@ -23,12 +23,13 @@ import (
 	"strings"
 	"sync"
 
-	"github.com/golang/glog"
 	"github.com/kubernetes-csi/csi-lib-utils/protosanitizer"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc"
 
 	cosi "github.com/container-object-storage-interface/spec"
+
+	"github.com/golang/klog"
 )
 
 // Defines Non blocking GRPC server interfaces
@@ -54,13 +55,13 @@ type nonBlockingGRPCServer struct {
 }
 
 func logGRPC(ctx context.Context, req interface{}, info *grpc.UnaryServerInfo, handler grpc.UnaryHandler) (interface{}, error) {
-	glog.V(3).Infof("GRPC call: %s", info.FullMethod)
-	glog.V(5).Infof("GRPC request: %s", protosanitizer.StripSecrets(req))
+	klog.Infof("GRPC call: %s", info.FullMethod)
+	klog.Infof("GRPC request: %s", protosanitizer.StripSecrets(req))
 	resp, err := handler(ctx, req)
 	if err != nil {
-		glog.Errorf("GRPC error: %v", err)
+		klog.Errorf("GRPC error: %v", err)
 	} else {
-		glog.V(5).Infof("GRPC response: %s", protosanitizer.StripSecrets(resp))
+		klog.Infof("GRPC response: %s", protosanitizer.StripSecrets(resp))
 	}
 	return resp, err
 }
@@ -100,21 +101,21 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, driver cosi.ProvisionerSe
 
 	proto, addr, err := ParseEndpoint(endpoint)
 	if err != nil {
-		glog.Fatal(err.Error())
+		klog.Fatal(err.Error())
 	}
 
 	if proto == "unix" {
 		addr = "/" + addr
 		if err := os.Remove(addr); err != nil && !os.IsNotExist(err) {
-			glog.Fatalf("Failed to remove %s, error: %s", addr, err.Error())
+			klog.Fatalf("Failed to remove %s, error: %s", addr, err.Error())
 		}
 	}
-	glog.Infof("Create listener on %s", endpoint)
+	klog.Infof("Create listener on %s", endpoint)
 
 	//listener, err := net.Listen("tcp", fmt.Sprintf(":%d", cosi-port))
 	listener, err := net.Listen(proto, addr)
 	if err != nil {
-		glog.Fatalf("Failed to listen: %v", err)
+		klog.Fatalf("Failed to listen: %v", err)
 	}
 
 	opts := []grpc.ServerOption{
@@ -123,12 +124,12 @@ func (s *nonBlockingGRPCServer) serve(endpoint string, driver cosi.ProvisionerSe
 	server := grpc.NewServer(opts...)
 	s.server = server
 
-	glog.Infof("Registering CosiControllerServer")
+	klog.Infof("Registering CosiControllerServer")
 	if driver != nil {
 		cosi.RegisterProvisionerServer(server, driver)
 	}
 
-	glog.Infof("Listening for connections on address: %#v", listener.Addr())
+	klog.Infof("Listening for connections on address: %#v", listener.Addr())
 
 	server.Serve(listener)
 

@@ -21,7 +21,7 @@ import (
 
 	cosi "github.com/container-object-storage-interface/spec"
 
-	"github.com/golang/glog"
+	"github.com/golang/klog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -38,7 +38,7 @@ func (ds *DriverServer) ProvisionerGetInfo(context.Context, *cosi.ProvisionerGet
 }
 
 func (ds DriverServer) ProvisionerCreateBucket(ctx context.Context, req *cosi.ProvisionerCreateBucketRequest) (*cosi.ProvisionerCreateBucketResponse, error) {
-	glog.V(5).Infof("Using mocked CreateBucket call")
+	klog.Infof("Using mocked CreateBucket call")
 
 	if ds.Name == "" {
 		return nil, status.Error(codes.Unavailable, "Driver name not configured")

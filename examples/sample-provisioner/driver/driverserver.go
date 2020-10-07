@@ -14,17 +14,22 @@ See the License for the specific language governing permissions and
 limitations under the License.
 */
 
-package grpcserver
+package driver
 
 import (
 	"fmt"
 
 	cosi "github.com/container-object-storage-interface/spec"
 
-	"github.com/golang/klog"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
+	"k8s.io/klog"
+)
+
+var (
+	PROVISIONER_NAME = "sample-provisioner.objectstorage.k8s.io"
+	VERSION          = "dev"
 )
 
 type DriverServer struct {

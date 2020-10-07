@@ -29,7 +29,7 @@ import (
 
 	cosi "github.com/container-object-storage-interface/spec"
 
-	"github.com/golang/klog"
+	"k8s.io/klog"
 )
 
 // Defines Non blocking GRPC server interfaces

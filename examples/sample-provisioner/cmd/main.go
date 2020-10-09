@@ -45,6 +45,7 @@ var cmd = &cobra.Command{
 		return run(args, cosiAddress)
 	},
 	DisableFlagsInUseLine: true,
+	Version: driver.VERSION,
 }
 
 func init() {

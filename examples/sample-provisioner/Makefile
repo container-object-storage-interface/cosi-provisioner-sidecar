@@ -10,17 +10,19 @@
 # See the License for the specific language governing permissions and
 # limitations under the License.
 # 
-BINARY_PATH=./bin/provisioner
 PATH_TO_MAIN=./cmd
-GIT_SHA := $(shell git rev-parse --verify HEAD || echo "unknown")
+GIT_SHA := $(shell git describe --always --abbrev=7 --match "NOT A TAG" --dirty="-dirty" || echo "unknown")
 export GIT_SHA
 GO_BLD_ARCH  ?= $(shell go env GOHOSTARCH)
 GO_BLD_OS ?=$(shell go env GOOS)
+BINARY_PATH=bin/sample-provisioner_${GO_BLD_OS}_${GO_BLD_ARCH}
+
+
 GO_BUILD_CMD := CGO_ENABLED=0 GOOS=$(GO_BLD_OS) GOARCH=$(GO_BLD_ARCH) \
     go build -a -installsuffix cgo -ldflags="\
     -X 'github.com/container-object-storage-interface/cosi-provisioner-sidecar/examples/sample-provisioner/driver.VERSION=$(GIT_SHA)'"
 
-all:	clean	build	run
+all:	build
 build: 
 	@echo "building sample-provisioner..." 
 	@$(GO_BUILD_CMD)  -o $(BINARY_PATH) $(PATH_TO_MAIN) 

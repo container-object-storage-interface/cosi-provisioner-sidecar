@@ -19,7 +19,7 @@ BINARY_PATH=bin/sample-provisioner_${GO_BLD_OS}_${GO_BLD_ARCH}
 
 
 GO_BUILD_CMD := CGO_ENABLED=0 GOOS=$(GO_BLD_OS) GOARCH=$(GO_BLD_ARCH) \
-    go build -a -installsuffix cgo -ldflags="\
+    go build -ldflags="\
     -X 'github.com/container-object-storage-interface/cosi-provisioner-sidecar/examples/sample-provisioner/driver.VERSION=$(GIT_SHA)'"
 
 all:	build
@@ -33,4 +33,8 @@ clean:
 
 run:
 	@echo "starting grpc server..."
-	./bin/provisioner
+	./bin/sample-provisioner_${GO_BLD_OS}_${GO_BLD_ARCH}  \
+	  --cosi-address tcp://0.0.0.0:9000 \
+	  --s3-endpoint localhost:9001 \
+	  --access-key AKIAIOSFODNN7EXAMPLE \
+	  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY 

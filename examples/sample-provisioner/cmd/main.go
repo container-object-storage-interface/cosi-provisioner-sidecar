@@ -26,6 +26,7 @@ import (
 
 	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/examples/sample-provisioner/driver"
 	server "github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/grpcserver"
+	"github.com/minio/minio-go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/klog"
@@ -33,6 +34,9 @@ import (
 
 var (
 	cosiAddress = "tcp://0.0.0.0:9000"
+	s3Endpoint  string
+	accessKey   string
+	secretKey   string
 	ctx         context.Context
 )
 
@@ -45,7 +49,7 @@ var cmd = &cobra.Command{
 		return run(args, cosiAddress)
 	},
 	DisableFlagsInUseLine: true,
-	Version: driver.VERSION,
+	Version:               driver.VERSION,
 }
 
 func init() {
@@ -59,7 +63,9 @@ func init() {
 			StringVarP(ptr, name, short, dfault, desc)
 	}
 	strFlag(cmd, &cosiAddress, "cosi-address", "", cosiAddress, "Path of the COSI driver socket that the provisioner will connect to.")
-
+	strFlag(cmd, &s3Endpoint, "s3-endpoint", "", "", "S3-endpont")
+	strFlag(cmd, &accessKey, "access-key", "", "", "S3-AccessKey")
+	strFlag(cmd, &secretKey, "secret-key", "", "", "S3-SecretKey")
 	hideFlag := func(name string) {
 		cmd.PersistentFlags().MarkHidden(name)
 	}
@@ -97,7 +103,12 @@ func main() {
 }
 
 func run(args []string, endpoint string) error {
-	cds := driver.DriverServer{Name: driver.PROVISIONER_NAME, Version: driver.VERSION}
+	// Initialize minio client object.
+	minioClient, err := minio.New(s3Endpoint, accessKey, secretKey, false)
+	if err != nil {
+		klog.Fatalln(err)
+	}
+	cds := driver.DriverServer{Name: driver.PROVISIONER_NAME, Version: driver.VERSION, S3Client: minioClient}
 	s := server.NewNonBlockingGRPCServer()
 	s.Start(endpoint, &cds)
 	s.Wait()

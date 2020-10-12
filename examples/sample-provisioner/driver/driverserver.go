@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	cosi "github.com/container-object-storage-interface/spec"
-
+	"github.com/minio/minio-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -34,6 +34,7 @@ var (
 
 type DriverServer struct {
 	Name, Version string
+	S3Client      *minio.Client
 }
 
 func (ds *DriverServer) ProvisionerGetInfo(context.Context, *cosi.ProvisionerGetInfoRequest) (*cosi.ProvisionerGetInfoResponse, error) {
@@ -43,7 +44,7 @@ func (ds *DriverServer) ProvisionerGetInfo(context.Context, *cosi.ProvisionerGet
 }
 
 func (ds DriverServer) ProvisionerCreateBucket(ctx context.Context, req *cosi.ProvisionerCreateBucketRequest) (*cosi.ProvisionerCreateBucketResponse, error) {
-	klog.Infof("Using mocked CreateBucket call")
+	klog.Infof("Using minio to create Backend Bucket")
 
 	if ds.Name == "" {
 		return nil, status.Error(codes.Unavailable, "Driver name not configured")
@@ -52,6 +53,20 @@ func (ds DriverServer) ProvisionerCreateBucket(ctx context.Context, req *cosi.Pr
 	if ds.Version == "" {
 		return nil, status.Error(codes.Unavailable, "Driver is missing version")
 	}
+
+	err := ds.S3Client.MakeBucket(req.BucketName, req.Region)
+	if err != nil {
+		// Check to see if the bucket already exists
+		exists, errBucketExists := ds.S3Client.BucketExists(req.BucketName)
+		if errBucketExists == nil && exists {
+			klog.Info("Backend Bucket already exists", req.BucketName)
+			return &cosi.ProvisionerCreateBucketResponse{}, nil
+		} else {
+			klog.Error(err)
+			return &cosi.ProvisionerCreateBucketResponse{}, err
+		}
+	}
+	klog.Info("Successfully created Backend Bucket", req.BucketName)
 
 	return &cosi.ProvisionerCreateBucketResponse{}, nil
 }

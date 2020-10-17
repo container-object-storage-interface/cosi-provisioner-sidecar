@@ -1,0 +1,51 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: object-storage-provisioner
+  labels:
+    app: object-storage-provisioner
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: object-storage-provisioner
+  strategy:
+    type: RollingUpdate
+    rollingUpdate:
+      maxSurge: 1
+      maxUnavailable: 0
+  template:
+    metadata:
+      labels:
+        app: object-storage-provisioner
+    spec:
+      containers:
+        - name: sample-driver
+          image: gcr.io/sample-driver
+          imagePullPolicy: IfNotPresent
+          envFrom:
+          - secretRef:
+              name: object-storage-config
+        - name: object-storage-sidecar
+          image: gcr.io/object-storage-sidecar
+          imagePullPolicy: IfNotPresent
+          env:
+          - name: CONNECT_ADDRESS
+            valueFrom:
+              secretKeyRef:
+                name: object-storage-provisioner
+                key: LISTEN_ADDRESS
+---
+
+apiVersion: v1
+kind: Secret
+metadata:
+  name: object-storage-provisioner
+  labels:
+    app: object-storage-provisioner
+spec:
+  data:
+    LISTEN_ADDRESS: 0.0.0.0:9000
+    S3_ENDPOINT:
+    ACCESS_KEY:
+    SECRET_KEY:

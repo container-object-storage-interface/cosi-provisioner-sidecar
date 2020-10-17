@@ -20,7 +20,7 @@ import (
 	"fmt"
 
 	cosi "github.com/container-object-storage-interface/spec"
-	"github.com/minio/minio-go"
+	minio "github.com/minio/minio-go"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"

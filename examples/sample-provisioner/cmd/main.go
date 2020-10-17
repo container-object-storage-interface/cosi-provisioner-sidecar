@@ -22,11 +22,12 @@ import (
 	"fmt"
 	"os"
 	"os/signal"
+	"strings"
 	"syscall"
 
 	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/examples/sample-provisioner/driver"
 	server "github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/grpcserver"
-	"github.com/minio/minio-go"
+	minio "github.com/minio/minio-go"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/klog"
@@ -62,7 +63,7 @@ func init() {
 		c.PersistentFlags().
 			StringVarP(ptr, name, short, dfault, desc)
 	}
-	strFlag(cmd, &cosiAddress, "cosi-address", "", cosiAddress, "Path of the COSI driver socket that the provisioner will connect to.")
+	strFlag(cmd, &cosiAddress, "listen-address", "", cosiAddress, "The address for the driver to listen on")
 	strFlag(cmd, &s3Endpoint, "s3-endpoint", "", "", "S3-endpont")
 	strFlag(cmd, &accessKey, "access-key", "", "", "S3-AccessKey")
 	strFlag(cmd, &secretKey, "secret-key", "", "", "S3-SecretKey")
@@ -76,6 +77,10 @@ func init() {
 	hideFlag("master")
 	hideFlag("stderrthreshold")
 	hideFlag("vmodule")
+
+	// Substitute _ for -
+	replacer := strings.NewReplacer("-", "_")
+	viper.SetEnvKeyReplacer(replacer)
 
 	// suppress the incorrect prefix in glog output
 	flag.CommandLine.Parse([]string{})

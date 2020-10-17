@@ -97,13 +97,13 @@ func (bl *bucketListener) Add(ctx context.Context, obj *v1alpha1.Bucket) error {
 		BucketName: obj.Spec.BucketRequest.Name,
 	}
 
-	switch obj.Spec.Protocol.ProtocolName {
+	switch obj.Spec.Protocol.Name {
 	case v1alpha1.ProtocolNameS3:
 		req.Region = obj.Spec.Protocol.S3.Region
 	case v1alpha1.ProtocolNameAzure:
 	case v1alpha1.ProtocolNameGCS:
 	default:
-		klog.Errorf("unknown procotol: %s", obj.Spec.Protocol.ProtocolName)
+		klog.Errorf("unknown procotol: %s", obj.Spec.Protocol.Name)
 		return nil
 	}
 
@@ -135,13 +135,13 @@ func (bl *bucketListener) Delete(ctx context.Context, obj *v1alpha1.Bucket) erro
 		BucketName: obj.Spec.BucketRequest.Name,
 	}
 
-	switch obj.Spec.Protocol.ProtocolName {
+	switch obj.Spec.Protocol.Name {
 	case v1alpha1.ProtocolNameS3:
 		req.Region = obj.Spec.Protocol.S3.Region
 	case v1alpha1.ProtocolNameAzure:
 	case v1alpha1.ProtocolNameGCS:
 	default:
-		klog.Errorf("unknown procotol: %s", obj.Spec.Protocol.ProtocolName)
+		klog.Errorf("unknown procotol: %s", obj.Spec.Protocol.Name)
 		return nil
 	}
 

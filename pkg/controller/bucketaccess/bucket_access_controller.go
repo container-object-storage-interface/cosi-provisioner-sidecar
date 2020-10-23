@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 
 	kubeclientset "k8s.io/client-go/kubernetes"
@@ -39,9 +40,9 @@ import (
 
 // bucketAccessListener manages BucketAccess objects
 type bucketAccessListener struct {
-	kubeClient        kubeclientset.Interface
-	bucketClient      bucketclientset.Interface
-	provisionerClient osspec.ProvisionerClient
+	kubeClient         kubeclientset.Interface
+	bucketAccessClient bucketclientset.Interface
+	provisionerClient  osspec.ProvisionerClient
 
 	// The name of the provisioner for which this controller handles
 	// bucket access.
@@ -49,6 +50,7 @@ type bucketAccessListener struct {
 	kubeVersion     *utilversion.Version
 }
 
+// NewBucketAccessController returns a controller that manages BucketAccess objects
 func NewBucketAccessController(provisionerName string, client osspec.ProvisionerClient) (*controller.ObjectStorageController, error) {
 	rateLimit := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(5*time.Second, 60*time.Minute),
@@ -70,6 +72,7 @@ func NewBucketAccessController(provisionerName string, client osspec.Provisioner
 	return bc, nil
 }
 
+// InitializeKubeClient initializes the kubernetes client
 func (bal *bucketAccessListener) InitializeKubeClient(k kubeclientset.Interface) {
 	bal.kubeClient = k
 
@@ -81,10 +84,12 @@ func (bal *bucketAccessListener) InitializeKubeClient(k kubeclientset.Interface)
 	}
 }
 
+// InitializeBucketClient initializes the object storage bucket client
 func (bal *bucketAccessListener) InitializeBucketClient(bc bucketclientset.Interface) {
-	bal.bucketClient = bc
+	bal.bucketAccessClient = bc
 }
 
+// Add will call the provisioner to grant permissions
 func (bal *bucketAccessListener) Add(ctx context.Context, obj *v1alpha1.BucketAccess) error {
 	klog.V(1).Infof("bucketAccessListener: add called for bucket access %s", obj.Name)
 
@@ -104,16 +109,21 @@ func (bal *bucketAccessListener) Add(ctx context.Context, obj *v1alpha1.BucketAc
 		klog.Errorf("error calling ProvisionerGrantBucketAccess: %v", err)
 		return err
 	}
-	klog.Infof("provisioner returned grant bucket access response %v", rsp)
+	klog.V(1).Infof("provisioner returned grant bucket access response %v", rsp)
 
+	// update bucket access status to success
+	obj.Status.AccessGranted = true
+	_, err = bal.bucketAccessClient.ObjectstorageV1alpha1().BucketAccesses().UpdateStatus(ctx, obj, metav1.UpdateOptions{})
 	return nil
 }
 
+// Update does nothing
 func (bal *bucketAccessListener) Update(ctx context.Context, old, new *v1alpha1.BucketAccess) error {
 	klog.V(1).Infof("bucketAccessListener: update called for bucket %s", old.Name)
 	return nil
 }
 
+// Delete will call the provisioner to revoke permissions
 func (bal *bucketAccessListener) Delete(ctx context.Context, obj *v1alpha1.BucketAccess) error {
 	klog.V(1).Infof("bucketAccessListener: delete called for bucket access %s", obj.Name)
 
@@ -133,7 +143,7 @@ func (bal *bucketAccessListener) Delete(ctx context.Context, obj *v1alpha1.Bucke
 		klog.Errorf("error calling ProvisionerRevokeBucketAccess: %v", err)
 		return err
 	}
-	klog.Infof("provisioner returned revoke bucket access response %v", rsp)
+	klog.V(1).Infof("provisioner returned revoke bucket access response %v", rsp)
 
 	return nil
 }

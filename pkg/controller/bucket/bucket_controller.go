@@ -22,6 +22,7 @@ import (
 	"strings"
 	"time"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 
 	kubeclientset "k8s.io/client-go/kubernetes"
@@ -49,6 +50,7 @@ type bucketListener struct {
 	kubeVersion     *utilversion.Version
 }
 
+// NewBucketController returns a controller that manages Bucket objects
 func NewBucketController(provisionerName string, client osspec.ProvisionerClient) (*controller.ObjectStorageController, error) {
 	rateLimit := workqueue.NewMaxOfRateLimiter(
 		workqueue.NewItemExponentialFailureRateLimiter(5*time.Second, 60*time.Minute),
@@ -70,6 +72,7 @@ func NewBucketController(provisionerName string, client osspec.ProvisionerClient
 	return bc, nil
 }
 
+// InitializeKubeClient initializes the kubernetes client
 func (bl *bucketListener) InitializeKubeClient(k kubeclientset.Interface) {
 	bl.kubeClient = k
 
@@ -81,10 +84,12 @@ func (bl *bucketListener) InitializeKubeClient(k kubeclientset.Interface) {
 	}
 }
 
+// InitializeBucketClient initializes the object storage bucket client
 func (bl *bucketListener) InitializeBucketClient(bc bucketclientset.Interface) {
 	bl.bucketClient = bc
 }
 
+// Add will call the provisioner and add a bucket
 func (bl *bucketListener) Add(ctx context.Context, obj *v1alpha1.Bucket) error {
 	klog.V(1).Infof("bucketListener: add called for bucket %s", obj.Name)
 
@@ -103,8 +108,9 @@ func (bl *bucketListener) Add(ctx context.Context, obj *v1alpha1.Bucket) error {
 	case v1alpha1.ProtocolNameAzure:
 	case v1alpha1.ProtocolNameGCS:
 	default:
-		klog.Errorf("unknown procotol: %s", obj.Spec.Protocol.Name)
-		return nil
+		errStr := fmt.Sprintf("unknown protocol: %s", obj.Spec.Protocol.Name)
+		klog.Errorf(errStr)
+		return fmt.Errorf(errStr)
 	}
 
 	// TODO set grpc timeout
@@ -113,16 +119,21 @@ func (bl *bucketListener) Add(ctx context.Context, obj *v1alpha1.Bucket) error {
 		klog.Errorf("error calling ProvisionerCreateBucket: %v", err)
 		return err
 	}
-	klog.Infof("provisioner returned create bucket response %v", rsp)
+	klog.V(1).Infof("provisioner returned create bucket response %v", rsp)
 
-	return nil
+	// update bucket status to success
+	obj.Status.BucketAvailable = true
+	_, err = bl.bucketClient.ObjectstorageV1alpha1().Buckets().UpdateStatus(ctx, obj, metav1.UpdateOptions{})
+	return err
 }
 
+// Update does nothing
 func (bl *bucketListener) Update(ctx context.Context, old, new *v1alpha1.Bucket) error {
 	klog.V(1).Infof("bucketListener: update called for bucket %s", old.Name)
 	return nil
 }
 
+// Delete will call the provisioner and delete a bucket
 func (bl *bucketListener) Delete(ctx context.Context, obj *v1alpha1.Bucket) error {
 	klog.V(1).Infof("bucketListener: delete called for bucket %s", obj.Name)
 
@@ -141,8 +152,9 @@ func (bl *bucketListener) Delete(ctx context.Context, obj *v1alpha1.Bucket) erro
 	case v1alpha1.ProtocolNameAzure:
 	case v1alpha1.ProtocolNameGCS:
 	default:
-		klog.Errorf("unknown procotol: %s", obj.Spec.Protocol.Name)
-		return nil
+		errStr := fmt.Sprintf("unknown protocol: %s", obj.Spec.Protocol.Name)
+		klog.Errorf(errStr)
+		return fmt.Errorf(errStr)
 	}
 
 	// TODO set grpc timeout
@@ -151,7 +163,7 @@ func (bl *bucketListener) Delete(ctx context.Context, obj *v1alpha1.Bucket) erro
 		klog.Errorf("error calling ProvisionerDeleteBucket: %v", err)
 		return err
 	}
-	klog.Infof("provisioner returned delete bucket response %v", rsp)
+	klog.V(1).Infof("provisioner returned delete bucket response %v", rsp)
 
 	return nil
 }

@@ -34,7 +34,7 @@ clean:
 run:
 	@echo "starting grpc server..."
 	./bin/sample-provisioner_${GO_BLD_OS}_${GO_BLD_ARCH}  \
-	  --cosi-address tcp://0.0.0.0:9000 \
+	  --listen-address tcp://0.0.0.0:9000 \
 	  --s3-endpoint localhost:9001 \
 	  --access-key AKIAIOSFODNN7EXAMPLE \
 	  --secret-key wJalrXUtnFEMI/K7MDENG/bPxRfiCYEXAMPLEKEY 

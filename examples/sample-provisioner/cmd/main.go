@@ -27,7 +27,8 @@ import (
 
 	"github.com/container-object-storage-interface/cosi-provisioner-sidecar/examples/sample-provisioner/driver"
 	server "github.com/container-object-storage-interface/cosi-provisioner-sidecar/pkg/grpcserver"
-	minio "github.com/minio/minio-go"
+	"github.com/minio/minio-go"
+	"github.com/minio/minio/pkg/madmin"
 	"github.com/spf13/cobra"
 	"github.com/spf13/viper"
 	"k8s.io/klog"
@@ -113,7 +114,11 @@ func run(args []string, endpoint string) error {
 	if err != nil {
 		klog.Fatalln(err)
 	}
-	cds := driver.DriverServer{Name: driver.PROVISIONER_NAME, Version: driver.VERSION, S3Client: minioClient}
+	minioAdminClient, err := madmin.New(s3Endpoint, accessKey, secretKey, false)
+	if err != nil {
+		klog.Fatalln(err)
+	}
+	cds := driver.DriverServer{Name: driver.PROVISIONER_NAME, Version: driver.VERSION, S3Client: minioClient, S3AdminClient: minioAdminClient}
 	s := server.NewNonBlockingGRPCServer()
 	s.Start(endpoint, &cds)
 	s.Wait()

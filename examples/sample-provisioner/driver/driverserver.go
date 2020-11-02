@@ -20,7 +20,13 @@ import (
 	"fmt"
 
 	cosi "github.com/container-object-storage-interface/spec"
-	minio "github.com/minio/minio-go"
+	"github.com/minio/minio-go"
+	"github.com/minio/minio/pkg/bucket/policy"
+	"github.com/minio/minio/pkg/bucket/policy/condition"
+
+	"github.com/minio/minio/pkg/auth"
+	iampolicy "github.com/minio/minio/pkg/iam/policy"
+	"github.com/minio/minio/pkg/madmin"
 	"golang.org/x/net/context"
 	"google.golang.org/grpc/codes"
 	"google.golang.org/grpc/status"
@@ -35,6 +41,7 @@ var (
 type DriverServer struct {
 	Name, Version string
 	S3Client      *minio.Client
+	S3AdminClient *madmin.AdminClient
 }
 
 func (ds *DriverServer) ProvisionerGetInfo(context.Context, *cosi.ProvisionerGetInfoRequest) (*cosi.ProvisionerGetInfoResponse, error) {
@@ -76,7 +83,41 @@ func (ds *DriverServer) ProvisionerDeleteBucket(ctx context.Context, req *cosi.P
 }
 
 func (ds *DriverServer) ProvisionerGrantBucketAccess(ctx context.Context, req *cosi.ProvisionerGrantBucketAccessRequest) (*cosi.ProvisionerGrantBucketAccessResponse, error) {
-	return nil, status.Error(codes.Unavailable, "Method not implemented")
+
+	creds, _ := auth.GetNewCredentials()
+
+	if err := ds.S3AdminClient.AddUser(context.Background(), creds.AccessKey, creds.SecretKey); err != nil {
+		klog.Error("failed to create user", err)
+		return nil, err
+	}
+
+	// Create policy
+	p := iampolicy.Policy{
+		Version: iampolicy.DefaultVersion,
+		Statements: []iampolicy.Statement{
+			iampolicy.NewStatement(
+				policy.Allow,
+				iampolicy.NewActionSet(iampolicy.GetObjectAction, iampolicy.PutObjectAction),
+				iampolicy.NewResourceSet(iampolicy.NewResource(req.GetBucketName()+"/*", "")),
+				condition.NewFunctions(),
+			)},
+	}
+
+	if err := ds.S3AdminClient.AddCannedPolicy(context.Background(), "write-get", &p); err != nil {
+		klog.Error("failed to add canned policy", err)
+		return nil, err
+	}
+
+	if err := ds.S3AdminClient.SetPolicy(context.Background(), "write-get", req.Principal, false); err != nil {
+		klog.Error("failed to set policy", err)
+		return nil, err
+	}
+
+	return &cosi.ProvisionerGrantBucketAccessResponse{
+		Principal:               req.Principal,
+		CredentialsFileContents: fmt.Sprintf("%s \n %s", creds.AccessKey, creds.SecretKey),
+		CredentialsFilePath:     ".minio/credentials",
+	}, nil
 }
 
 func (ds *DriverServer) ProvisionerRevokeBucketAccess(ctx context.Context, req *cosi.ProvisionerRevokeBucketAccessRequest) (*cosi.ProvisionerRevokeBucketAccessResponse, error) {

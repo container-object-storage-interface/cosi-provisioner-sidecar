@@ -102,6 +102,12 @@ func TestAddValidProtocols(t *testing.T) {
 	provisioner := "provisioner1"
 	region := "region1"
 	bucketName := "bucket1"
+	protocolVersion := "proto1"
+	sigVersion := v1alpha1.S3SignatureVersion(v1alpha1.S3SignatureVersionV2)
+	account := "account1"
+	keyName := "keyName1"
+	projId := "id1"
+	anonAccess := "BUCKET_PRIVATE"
 	mpc := struct{ fakespec.MockProvisionerClient }{}
 
 	testCases := []struct {
@@ -109,12 +115,15 @@ func TestAddValidProtocols(t *testing.T) {
 		setProtocol  func(b *v1alpha1.Bucket)
 		protocolName v1alpha1.ProtocolName
 		createFunc   func(ctx context.Context, in *osspec.ProvisionerCreateBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerCreateBucketResponse, error)
+		params       map[string]string
 	}{
 		{
 			name: "S3",
 			setProtocol: func(b *v1alpha1.Bucket) {
 				b.Spec.Protocol.S3 = &v1alpha1.S3Protocol{
-					Region: region,
+					Region:           region,
+					Version:          protocolVersion,
+					SignatureVersion: sigVersion,
 				}
 			},
 			protocolName: v1alpha1.ProtocolNameS3,
@@ -125,49 +134,122 @@ func TestAddValidProtocols(t *testing.T) {
 				if in.Region != region {
 					t.Errorf("expected %s, got %s", region, in.Region)
 				}
+				if in.BucketContext["Version"] != protocolVersion {
+					t.Errorf("expected %s, got %s", protocolVersion, in.BucketContext["Version"])
+				}
+				if in.BucketContext["SignatureVersion"] != string(sigVersion) {
+					t.Errorf("expected %s, got %s", sigVersion, in.BucketContext["SignatureVersion"])
+				}
 				return &osspec.ProvisionerCreateBucketResponse{}, nil
 			},
+			params: map[string]string{"BucketInstanceName": bucketName},
 		},
 		{
 			name: "GCS",
 			setProtocol: func(b *v1alpha1.Bucket) {
-				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{}
+				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{
+					ServiceAccount: account,
+					PrivateKeyName: keyName,
+					ProjectID:      projId,
+				}
 			},
 			protocolName: v1alpha1.ProtocolNameGCS,
 			createFunc: func(ctx context.Context, in *osspec.ProvisionerCreateBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerCreateBucketResponse, error) {
 				if in.BucketName != bucketName {
 					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
 				}
+				if in.BucketContext["ServiceAccount"] != account {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["ServiceAccount"])
+				}
+				if in.BucketContext["PrivateKeyName"] != keyName {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["PrivateKeyName"])
+				}
+				if in.BucketContext["ProjectID"] != projId {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["ProjectID"])
+				}
 				return &osspec.ProvisionerCreateBucketResponse{}, nil
 			},
+			params: map[string]string{"BucketInstanceName": bucketName},
 		},
 		{
 			name: "AzureBlob",
 			setProtocol: func(b *v1alpha1.Bucket) {
-				b.Spec.Protocol.AzureBlob = &v1alpha1.AzureProtocol{}
+				b.Spec.Protocol.AzureBlob = &v1alpha1.AzureProtocol{
+					StorageAccount: account,
+				}
 			},
 			protocolName: v1alpha1.ProtocolNameAzure,
 			createFunc: func(ctx context.Context, in *osspec.ProvisionerCreateBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerCreateBucketResponse, error) {
 				if in.BucketName != bucketName {
 					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
 				}
+				if in.BucketContext["StorageAccount"] != account {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
+				}
 				return &osspec.ProvisionerCreateBucketResponse{}, nil
 			},
+			params: map[string]string{"BucketInstanceName": bucketName},
+		},
+		{
+			name: "AnonymousAccessMode",
+			setProtocol: func(b *v1alpha1.Bucket) {
+				b.Spec.Protocol.AzureBlob = &v1alpha1.AzureProtocol{
+					StorageAccount: account,
+				}
+			},
+			protocolName: v1alpha1.ProtocolNameAzure,
+			createFunc: func(ctx context.Context, in *osspec.ProvisionerCreateBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerCreateBucketResponse, error) {
+				if in.BucketName != bucketName {
+					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
+				}
+				if in.BucketContext["StorageAccount"] != account {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
+				}
+				aMode := osspec.ProvisionerCreateBucketRequest_AnonymousBucketAccessMode(osspec.ProvisionerCreateBucketRequest_AnonymousBucketAccessMode_value[anonAccess])
+				if in.AnonymousBucketAccessMode != aMode {
+					t.Errorf("expected %s, got %s", aMode, in.AnonymousBucketAccessMode)
+				}
+				return &osspec.ProvisionerCreateBucketResponse{}, nil
+			},
+			params: map[string]string{
+				"BucketInstanceName":  bucketName,
+				"AnonymousAccessMode": anonAccess,
+			},
+		},
+		{
+			name: "BucketPrefix",
+			setProtocol: func(b *v1alpha1.Bucket) {
+				b.Spec.Protocol.AzureBlob = &v1alpha1.AzureProtocol{
+					StorageAccount: account,
+				}
+			},
+			protocolName: v1alpha1.ProtocolNameAzure,
+			createFunc: func(ctx context.Context, in *osspec.ProvisionerCreateBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerCreateBucketResponse, error) {
+				if in.BucketName != "" {
+					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
+				}
+				if in.BucketContext["BucketPrefix"] != bucketName {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
+				}
+				if in.BucketContext["StorageAccount"] != account {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
+				}
+				return &osspec.ProvisionerCreateBucketResponse{}, nil
+			},
+			params: map[string]string{"BucketPrefix": bucketName},
 		},
 	}
 
 	for _, tc := range testCases {
 		b := v1alpha1.Bucket{
 			Spec: v1alpha1.BucketSpec{
-				BucketRequest: &v1alpha1.ObjectReference{
-					Name: bucketName,
-				},
 				Provisioner: provisioner,
 				Protocol: v1alpha1.Protocol{
 					RequestedProtocol: v1alpha1.RequestedProtocol{
 						Name: tc.protocolName,
 					},
 				},
+				Parameters: tc.params,
 			},
 		}
 
@@ -254,6 +336,12 @@ func TestDeleteValidProtocols(t *testing.T) {
 	provisioner := "provisioner1"
 	region := "region1"
 	bucketName := "bucket1"
+	protocolVersion := "proto1"
+	sigVersion := v1alpha1.S3SignatureVersion(v1alpha1.S3SignatureVersionV2)
+	account := "account1"
+	keyName := "keyName1"
+	projId := "id1"
+	endpoint := "endpoint1"
 	mpc := struct{ fakespec.MockProvisionerClient }{}
 
 	testCases := []struct {
@@ -266,7 +354,11 @@ func TestDeleteValidProtocols(t *testing.T) {
 			name: "S3",
 			setProtocol: func(b *v1alpha1.Bucket) {
 				b.Spec.Protocol.S3 = &v1alpha1.S3Protocol{
-					Region: region,
+					Region:           region,
+					Version:          protocolVersion,
+					SignatureVersion: sigVersion,
+					BucketName:       bucketName,
+					Endpoint:         endpoint,
 				}
 			},
 			protocolName: v1alpha1.ProtocolNameS3,
@@ -277,18 +369,41 @@ func TestDeleteValidProtocols(t *testing.T) {
 				if in.Region != region {
 					t.Errorf("expected %s, got %s", region, in.Region)
 				}
+				if in.BucketContext["Version"] != protocolVersion {
+					t.Errorf("expected %s, got %s", protocolVersion, in.BucketContext["Version"])
+				}
+				if in.BucketContext["SignatureVersion"] != string(sigVersion) {
+					t.Errorf("expected %s, got %s", sigVersion, in.BucketContext["SignatureVersion"])
+				}
+				if in.BucketContext["Endpoint"] != endpoint {
+					t.Errorf("expected %s, got %s", endpoint, in.BucketContext["Endpoint"])
+				}
 				return &osspec.ProvisionerDeleteBucketResponse{}, nil
 			},
 		},
 		{
 			name: "GCS",
 			setProtocol: func(b *v1alpha1.Bucket) {
-				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{}
+				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{
+					ServiceAccount: account,
+					PrivateKeyName: keyName,
+					ProjectID:      projId,
+					BucketName:     bucketName,
+				}
 			},
 			protocolName: v1alpha1.ProtocolNameGCS,
 			deleteFunc: func(ctx context.Context, in *osspec.ProvisionerDeleteBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerDeleteBucketResponse, error) {
 				if in.BucketName != bucketName {
 					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
+				}
+				if in.BucketContext["ServiceAccount"] != account {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["ServiceAccount"])
+				}
+				if in.BucketContext["PrivateKeyName"] != keyName {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["PrivateKeyName"])
+				}
+				if in.BucketContext["ProjectID"] != projId {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["ProjectID"])
 				}
 				return &osspec.ProvisionerDeleteBucketResponse{}, nil
 			},
@@ -296,12 +411,18 @@ func TestDeleteValidProtocols(t *testing.T) {
 		{
 			name: "AzureBlob",
 			setProtocol: func(b *v1alpha1.Bucket) {
-				b.Spec.Protocol.AzureBlob = &v1alpha1.AzureProtocol{}
+				b.Spec.Protocol.AzureBlob = &v1alpha1.AzureProtocol{
+					StorageAccount: account,
+					ContainerName:  bucketName,
+				}
 			},
 			protocolName: v1alpha1.ProtocolNameAzure,
 			deleteFunc: func(ctx context.Context, in *osspec.ProvisionerDeleteBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerDeleteBucketResponse, error) {
 				if in.BucketName != bucketName {
 					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
+				}
+				if in.BucketContext["StorageAccount"] != account {
+					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
 				}
 				return &osspec.ProvisionerDeleteBucketResponse{}, nil
 			},
@@ -311,9 +432,6 @@ func TestDeleteValidProtocols(t *testing.T) {
 	for _, tc := range testCases {
 		b := v1alpha1.Bucket{
 			Spec: v1alpha1.BucketSpec{
-				BucketRequest: &v1alpha1.ObjectReference{
-					Name: bucketName,
-				},
 				Provisioner: provisioner,
 				Protocol: v1alpha1.Protocol{
 					RequestedProtocol: v1alpha1.RequestedProtocol{

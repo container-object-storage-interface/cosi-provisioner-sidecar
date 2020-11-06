@@ -26,6 +26,7 @@ import (
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 
 	kubeclientset "k8s.io/client-go/kubernetes"
+	"k8s.io/client-go/util/retry"
 	"k8s.io/client-go/util/workqueue"
 
 	"github.com/container-object-storage-interface/api/apis/objectstorage.k8s.io/v1alpha1"
@@ -99,18 +100,37 @@ func (bl *bucketListener) Add(ctx context.Context, obj *v1alpha1.Bucket) error {
 	}
 
 	req := osspec.ProvisionerCreateBucketRequest{
-		BucketName: obj.Spec.BucketRequest.Name,
+		BucketContext: map[string]string{},
+	}
+	if len(obj.Spec.Parameters["BucketInstanceName"]) > 0 {
+		req.BucketName = obj.Spec.Parameters["BucketInstanceName"]
+	} else if len(obj.Spec.Parameters["BucketPrefix"]) > 0 {
+		req.BucketContext["BucketPrefix"] = obj.Spec.Parameters["BucketPrefix"]
+	}
+
+	if obj.Spec.AnonymousAccessMode.Private {
+		req.AnonymousBucketAccessMode = osspec.ProvisionerCreateBucketRequest_BUCKET_PRIVATE
+	} else if obj.Spec.AnonymousAccessMode.PublicReadOnly {
+		req.AnonymousBucketAccessMode = osspec.ProvisionerCreateBucketRequest_BUCKET_READ_ONLY
+	} else if obj.Spec.AnonymousAccessMode.PublicReadWrite {
+		req.AnonymousBucketAccessMode = osspec.ProvisionerCreateBucketRequest_BUCKET_WRITE_ONLY
+	} else if obj.Spec.AnonymousAccessMode.PublicWriteOnly {
+		req.AnonymousBucketAccessMode = osspec.ProvisionerCreateBucketRequest_BUCKET_READ_WRITE
 	}
 
 	switch obj.Spec.Protocol.Name {
 	case v1alpha1.ProtocolNameS3:
 		req.Region = obj.Spec.Protocol.S3.Region
+		req.BucketContext["Version"] = obj.Spec.Protocol.S3.Version
+		req.BucketContext["SignatureVersion"] = string(obj.Spec.Protocol.S3.SignatureVersion)
 	case v1alpha1.ProtocolNameAzure:
+		req.BucketContext["StorageAccount"] = obj.Spec.Protocol.AzureBlob.StorageAccount
 	case v1alpha1.ProtocolNameGCS:
+		req.BucketContext["ServiceAccount"] = obj.Spec.Protocol.GCS.ServiceAccount
+		req.BucketContext["PrivateKeyName"] = obj.Spec.Protocol.GCS.PrivateKeyName
+		req.BucketContext["ProjectID"] = obj.Spec.Protocol.GCS.ProjectID
 	default:
-		errStr := fmt.Sprintf("unknown protocol: %s", obj.Spec.Protocol.Name)
-		klog.Errorf(errStr)
-		return fmt.Errorf(errStr)
+		return fmt.Errorf("unknown protocol: %s", obj.Spec.Protocol.Name)
 	}
 
 	// TODO set grpc timeout
@@ -121,10 +141,10 @@ func (bl *bucketListener) Add(ctx context.Context, obj *v1alpha1.Bucket) error {
 	}
 	klog.V(1).Infof("provisioner returned create bucket response %v", rsp)
 
-	// update bucket status to success
-	obj.Status.BucketAvailable = true
-	_, err = bl.bucketClient.ObjectstorageV1alpha1().Buckets().UpdateStatus(ctx, obj, metav1.UpdateOptions{})
-	return err
+	// TODO update the bucket name and endpoint in the protocol spec
+
+	// update bucket availability to true
+	return bl.updateStatus(ctx, obj.Name, "Bucket Provisioned", true)
 }
 
 // Update does nothing
@@ -143,27 +163,53 @@ func (bl *bucketListener) Delete(ctx context.Context, obj *v1alpha1.Bucket) erro
 	}
 
 	req := osspec.ProvisionerDeleteBucketRequest{
-		BucketName: obj.Spec.BucketRequest.Name,
+		BucketContext: map[string]string{},
 	}
 
 	switch obj.Spec.Protocol.Name {
 	case v1alpha1.ProtocolNameS3:
+		req.BucketName = obj.Spec.Protocol.S3.BucketName
 		req.Region = obj.Spec.Protocol.S3.Region
+		req.BucketContext["Version"] = obj.Spec.Protocol.S3.Version
+		req.BucketContext["SignatureVersion"] = string(obj.Spec.Protocol.S3.SignatureVersion)
+		req.BucketContext["Endpoint"] = obj.Spec.Protocol.S3.Endpoint
 	case v1alpha1.ProtocolNameAzure:
+		req.BucketName = obj.Spec.Protocol.AzureBlob.ContainerName
+		req.BucketContext["StorageAccount"] = obj.Spec.Protocol.AzureBlob.StorageAccount
 	case v1alpha1.ProtocolNameGCS:
+		req.BucketName = obj.Spec.Protocol.GCS.BucketName
+		req.BucketContext["ServiceAccount"] = obj.Spec.Protocol.GCS.ServiceAccount
+		req.BucketContext["PrivateKeyName"] = obj.Spec.Protocol.GCS.PrivateKeyName
+		req.BucketContext["ProjectID"] = obj.Spec.Protocol.GCS.ProjectID
 	default:
-		errStr := fmt.Sprintf("unknown protocol: %s", obj.Spec.Protocol.Name)
-		klog.Errorf(errStr)
-		return fmt.Errorf(errStr)
+		return fmt.Errorf("unknown protocol: %s", obj.Spec.Protocol.Name)
 	}
 
 	// TODO set grpc timeout
 	rsp, err := bl.provisionerClient.ProvisionerDeleteBucket(ctx, &req)
 	if err != nil {
 		klog.Errorf("error calling ProvisionerDeleteBucket: %v", err)
+		obj.Status.Message = "Bucket Deleting"
+		obj.Status.BucketAvailable = false
+		_, err = bl.bucketClient.ObjectstorageV1alpha1().Buckets().UpdateStatus(ctx, obj, metav1.UpdateOptions{})
 		return err
 	}
 	klog.V(1).Infof("provisioner returned delete bucket response %v", rsp)
 
-	return nil
+	// update bucket availability to false
+	return bl.updateStatus(ctx, obj.Name, "Bucket Deleted", false)
+}
+
+func (bl *bucketListener) updateStatus(ctx context.Context, name, msg string, state bool) error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		bucket, err := bl.bucketClient.ObjectstorageV1alpha1().Buckets().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		bucket.Status.Message = msg
+		bucket.Status.BucketAvailable = state
+		_, err = bl.bucketClient.ObjectstorageV1alpha1().Buckets().UpdateStatus(ctx, bucket, metav1.UpdateOptions{})
+		return err
+	})
+	return err
 }

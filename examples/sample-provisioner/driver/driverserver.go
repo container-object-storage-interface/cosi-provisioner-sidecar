@@ -84,7 +84,11 @@ func (ds *DriverServer) ProvisionerDeleteBucket(ctx context.Context, req *cosi.P
 
 func (ds *DriverServer) ProvisionerGrantBucketAccess(ctx context.Context, req *cosi.ProvisionerGrantBucketAccessRequest) (*cosi.ProvisionerGrantBucketAccessResponse, error) {
 
-	creds, _ := auth.GetNewCredentials()
+	creds, err := auth.GetNewCredentials()
+	if err != nil {
+		klog.Error("failed to generate new credentails")
+		return nil, err
+	}
 
 	if err := ds.S3AdminClient.AddUser(context.Background(), creds.AccessKey, creds.SecretKey); err != nil {
 		klog.Error("failed to create user", err)
@@ -121,5 +125,11 @@ func (ds *DriverServer) ProvisionerGrantBucketAccess(ctx context.Context, req *c
 }
 
 func (ds *DriverServer) ProvisionerRevokeBucketAccess(ctx context.Context, req *cosi.ProvisionerRevokeBucketAccessRequest) (*cosi.ProvisionerRevokeBucketAccessResponse, error) {
-	return nil, status.Error(codes.Unavailable, "Method not implemented")
+
+	// revokes user access to bucket
+	if err := ds.S3AdminClient.RemoveUser(ctx, req.GetPrincipal()); err != nil {
+		klog.Error("falied to Revoke Bucket Access")
+		return nil, err
+	}
+	return &cosi.ProvisionerRevokeBucketAccessResponse{}, nil
 }

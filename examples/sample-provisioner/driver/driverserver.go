@@ -79,7 +79,13 @@ func (ds DriverServer) ProvisionerCreateBucket(ctx context.Context, req *cosi.Pr
 }
 
 func (ds *DriverServer) ProvisionerDeleteBucket(ctx context.Context, req *cosi.ProvisionerDeleteBucketRequest) (*cosi.ProvisionerDeleteBucketResponse, error) {
-	return nil, status.Error(codes.Unavailable, "Method not implemented")
+
+	if err := ds.S3Client.RemoveBucket(req.BucketName); err != nil {
+		klog.Info("failed to delete bucket", req.BucketName)
+		return nil, err
+
+	}
+	return &cosi.ProvisionerDeleteBucketResponse{}, nil
 }
 
 func (ds *DriverServer) ProvisionerGrantBucketAccess(ctx context.Context, req *cosi.ProvisionerGrantBucketAccessRequest) (*cosi.ProvisionerGrantBucketAccessResponse, error) {
@@ -101,26 +107,26 @@ func (ds *DriverServer) ProvisionerGrantBucketAccess(ctx context.Context, req *c
 		Statements: []iampolicy.Statement{
 			iampolicy.NewStatement(
 				policy.Allow,
-				iampolicy.NewActionSet(iampolicy.GetObjectAction, iampolicy.PutObjectAction),
+				iampolicy.NewActionSet("s3:*"),
 				iampolicy.NewResourceSet(iampolicy.NewResource(req.GetBucketName()+"/*", "")),
 				condition.NewFunctions(),
 			)},
 	}
 
-	if err := ds.S3AdminClient.AddCannedPolicy(context.Background(), "write-get", &p); err != nil {
+	if err := ds.S3AdminClient.AddCannedPolicy(context.Background(), "s3:*", &p); err != nil {
 		klog.Error("failed to add canned policy", err)
 		return nil, err
 	}
 
-	if err := ds.S3AdminClient.SetPolicy(context.Background(), "write-get", req.Principal, false); err != nil {
+	if err := ds.S3AdminClient.SetPolicy(context.Background(), "s3:*", creds.AccessKey, false); err != nil {
 		klog.Error("failed to set policy", err)
 		return nil, err
 	}
 
 	return &cosi.ProvisionerGrantBucketAccessResponse{
 		Principal:               req.Principal,
-		CredentialsFileContents: fmt.Sprintf("%s \n %s", creds.AccessKey, creds.SecretKey),
-		CredentialsFilePath:     ".minio/credentials",
+		CredentialsFileContents: fmt.Sprintf("[default]\naws_access_key %s\naws_secret_key %s", creds.AccessKey, creds.SecretKey),
+		CredentialsFilePath:     ".aws/credentials",
 	}, nil
 }
 

@@ -100,12 +100,8 @@ func (bl *bucketListener) Add(ctx context.Context, obj *v1alpha1.Bucket) error {
 	}
 
 	req := osspec.ProvisionerCreateBucketRequest{
+		BucketName:    obj.Name,
 		BucketContext: map[string]string{},
-	}
-	if len(obj.Spec.Parameters["BucketInstanceName"]) > 0 {
-		req.BucketName = obj.Spec.Parameters["BucketInstanceName"]
-	} else if len(obj.Spec.Parameters["BucketPrefix"]) > 0 {
-		req.BucketContext["BucketPrefix"] = obj.Spec.Parameters["BucketPrefix"]
 	}
 
 	if obj.Spec.AnonymousAccessMode.Private {

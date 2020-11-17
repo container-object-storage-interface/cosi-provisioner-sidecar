@@ -22,7 +22,10 @@ import (
 	"strings"
 	"time"
 
+	v1 "k8s.io/api/core/v1"
+
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/types"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 
 	kubeclientset "k8s.io/client-go/kubernetes"
@@ -38,6 +41,10 @@ import (
 
 	"golang.org/x/time/rate"
 )
+
+func generateSecretName(uid types.UID) string {
+	return fmt.Sprintf("ba-%s", string(uid))
+}
 
 // bucketAccessListener manages BucketAccess objects
 type bucketAccessListener struct {
@@ -138,6 +145,36 @@ func (bal *bucketAccessListener) Add(ctx context.Context, obj *v1alpha1.BucketAc
 	}
 	klog.V(1).Infof("provisioner returned grant bucket access response %v", rsp)
 
+	// Only update the principal in the BucketAccess if it wasn't set because
+	// that means that the provisioner created one
+	if len(obj.Spec.Principal) == 0 {
+		err = bal.updatePrincipal(ctx, obj.Name, *rsp)
+		if err != nil {
+			return err
+		}
+	}
+
+	// Only create the secret with credentials if serviveAccount isn't set.
+	// If serviceAccount is set then authorization happens out of band in the
+	// cloud provider
+	if len(obj.Spec.ServiceAccount) == 0 {
+		secret := v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: generateSecretName(obj.UID),
+			},
+			StringData: map[string]string{
+				"CredentialsFilePath":     rsp.CredentialsFilePath,
+				"CredentialsFileContents": rsp.CredentialsFileContents,
+			},
+			Type: v1.SecretTypeOpaque,
+		}
+		// It's unlikely but should probably handle retries on rare case of collision
+		_, err = bal.kubeClient.CoreV1().Secrets("objectstorage-system").Create(ctx, &secret, metav1.CreateOptions{})
+		if err != nil {
+			return err
+		}
+	}
+
 	// update bucket access status to granted
 	return bal.updateStatus(ctx, obj.Name, "Permissions Granted", true)
 }
@@ -195,7 +232,16 @@ func (bal *bucketAccessListener) Delete(ctx context.Context, obj *v1alpha1.Bucke
 	}
 	klog.V(1).Infof("provisioner returned revoke bucket access response %v", rsp)
 
-	// update bucket access status to revoked
+	// Delete the secret
+	if len(obj.Spec.ServiceAccount) == 0 {
+		// It's unlikely but should probably handle retries on rare case of collision
+		err = bal.kubeClient.CoreV1().Secrets("objectstorage-system").Delete(ctx, generateSecretName(obj.UID), metav1.DeleteOptions{})
+		if err != nil {
+			return err
+		}
+	}
+
+	// Update bucket access status to revoked
 	return bal.updateStatus(ctx, obj.Name, "Permissions Revoked", false)
 }
 
@@ -208,6 +254,19 @@ func (bal *bucketAccessListener) updateStatus(ctx context.Context, name, msg str
 		bucketAccess.Status.Message = msg
 		bucketAccess.Status.AccessGranted = state
 		_, err = bal.bucketAccessClient.ObjectstorageV1alpha1().BucketAccesses().UpdateStatus(ctx, bucketAccess, metav1.UpdateOptions{})
+		return err
+	})
+	return err
+}
+
+func (bal *bucketAccessListener) updatePrincipal(ctx context.Context, name string, resp osspec.ProvisionerGrantBucketAccessResponse) error {
+	err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+		bucketAccess, err := bal.bucketAccessClient.ObjectstorageV1alpha1().BucketAccesses().Get(ctx, name, metav1.GetOptions{})
+		if err != nil {
+			return err
+		}
+		bucketAccess.Spec.Principal = resp.Principal
+		_, err = bal.bucketAccessClient.ObjectstorageV1alpha1().BucketAccesses().Update(ctx, bucketAccess, metav1.UpdateOptions{})
 		return err
 	})
 	return err

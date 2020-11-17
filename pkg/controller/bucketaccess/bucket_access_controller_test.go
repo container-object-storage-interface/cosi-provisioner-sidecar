@@ -19,6 +19,7 @@ package bucketaccess
 import (
 	"context"
 	"reflect"
+	"strings"
 	"testing"
 
 	"github.com/container-object-storage-interface/api/apis/objectstorage.k8s.io/v1alpha1"
@@ -28,6 +29,7 @@ import (
 	osspec "github.com/container-object-storage-interface/spec"
 	fakespec "github.com/container-object-storage-interface/spec/fake"
 
+	v1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/version"
@@ -108,16 +110,22 @@ func TestAdd(t *testing.T) {
 	sigVersion := v1alpha1.S3SignatureVersion(v1alpha1.S3SignatureVersionV2)
 	account := "account1"
 	keyName := "keyName1"
-	projId := "id1"
+	projID := "id1"
 	endpoint := "endpoint1"
 	instanceName := "instance"
+	credsContents := "credsContents"
+	credsFile := "credsFile"
+	generatedPrincipal := "driverPrincipal"
+	sa := "serviceAccount"
 	mpc := struct{ fakespec.MockProvisionerClient }{}
 
 	testCases := []struct {
-		name         string
-		setProtocol  func(b *v1alpha1.Bucket)
-		protocolName v1alpha1.ProtocolName
-		grantFunc    func(ctx context.Context, in *osspec.ProvisionerGrantBucketAccessRequest, opts ...grpc.CallOption) (*osspec.ProvisionerGrantBucketAccessResponse, error)
+		name           string
+		setProtocol    func(b *v1alpha1.Bucket)
+		protocolName   v1alpha1.ProtocolName
+		grantFunc      func(ctx context.Context, in *osspec.ProvisionerGrantBucketAccessRequest, opts ...grpc.CallOption) (*osspec.ProvisionerGrantBucketAccessResponse, error)
+		principal      string
+		serviceAccount string
 	}{
 		{
 			name: "S3",
@@ -150,8 +158,14 @@ func TestAdd(t *testing.T) {
 				if in.BucketContext["Endpoint"] != endpoint {
 					t.Errorf("expected %s, got %s", endpoint, in.BucketContext["Endpoint"])
 				}
-				return &osspec.ProvisionerGrantBucketAccessResponse{}, nil
+				return &osspec.ProvisionerGrantBucketAccessResponse{
+					Principal:               principal,
+					CredentialsFileContents: credsContents,
+					CredentialsFilePath:     credsFile,
+				}, nil
 			},
+			principal:      principal,
+			serviceAccount: "",
 		},
 		{
 			name: "GCS",
@@ -159,7 +173,7 @@ func TestAdd(t *testing.T) {
 				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{
 					ServiceAccount: account,
 					PrivateKeyName: keyName,
-					ProjectID:      projId,
+					ProjectID:      projID,
 					BucketName:     bucketName,
 				}
 			},
@@ -177,11 +191,17 @@ func TestAdd(t *testing.T) {
 				if in.BucketContext["PrivateKeyName"] != keyName {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["PrivateKeyName"])
 				}
-				if in.BucketContext["ProjectID"] != projId {
+				if in.BucketContext["ProjectID"] != projID {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["ProjectID"])
 				}
-				return &osspec.ProvisionerGrantBucketAccessResponse{}, nil
+				return &osspec.ProvisionerGrantBucketAccessResponse{
+					Principal:               principal,
+					CredentialsFileContents: credsContents,
+					CredentialsFilePath:     credsFile,
+				}, nil
 			},
+			principal:      principal,
+			serviceAccount: "",
 		},
 		{
 			name: "AzureBlob",
@@ -202,8 +222,58 @@ func TestAdd(t *testing.T) {
 				if in.BucketContext["StorageAccount"] != account {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
 				}
-				return &osspec.ProvisionerGrantBucketAccessResponse{}, nil
+				return &osspec.ProvisionerGrantBucketAccessResponse{
+					Principal:               principal,
+					CredentialsFileContents: credsContents,
+					CredentialsFilePath:     credsFile,
+				}, nil
 			},
+			principal:      principal,
+			serviceAccount: "",
+		},
+		{
+			name: "No Principal",
+			setProtocol: func(b *v1alpha1.Bucket) {
+				b.Spec.Protocol.S3 = &v1alpha1.S3Protocol{
+					Region:           region,
+					Version:          protocolVersion,
+					SignatureVersion: sigVersion,
+					BucketName:       bucketName,
+					Endpoint:         endpoint,
+				}
+			},
+			protocolName: v1alpha1.ProtocolNameS3,
+			grantFunc: func(ctx context.Context, in *osspec.ProvisionerGrantBucketAccessRequest, opts ...grpc.CallOption) (*osspec.ProvisionerGrantBucketAccessResponse, error) {
+				return &osspec.ProvisionerGrantBucketAccessResponse{
+					Principal:               generatedPrincipal,
+					CredentialsFileContents: credsContents,
+					CredentialsFilePath:     credsFile,
+				}, nil
+			},
+			principal:      "",
+			serviceAccount: "",
+		},
+		{
+			name: "ServiceAccount exists",
+			setProtocol: func(b *v1alpha1.Bucket) {
+				b.Spec.Protocol.S3 = &v1alpha1.S3Protocol{
+					Region:           region,
+					Version:          protocolVersion,
+					SignatureVersion: sigVersion,
+					BucketName:       bucketName,
+					Endpoint:         endpoint,
+				}
+			},
+			protocolName: v1alpha1.ProtocolNameS3,
+			grantFunc: func(ctx context.Context, in *osspec.ProvisionerGrantBucketAccessRequest, opts ...grpc.CallOption) (*osspec.ProvisionerGrantBucketAccessResponse, error) {
+				return &osspec.ProvisionerGrantBucketAccessResponse{
+					Principal:               principal,
+					CredentialsFileContents: credsContents,
+					CredentialsFilePath:     credsFile,
+				}, nil
+			},
+			principal:      principal,
+			serviceAccount: sa,
 		},
 	}
 
@@ -226,26 +296,51 @@ func TestAdd(t *testing.T) {
 			Spec: v1alpha1.BucketAccessSpec{
 				BucketInstanceName: instanceName,
 				Provisioner:        provisioner,
-				Principal:          principal,
+				Principal:          tc.principal,
+				ServiceAccount:     tc.serviceAccount,
 			},
 		}
 
 		ctx := context.TODO()
 		tc.setProtocol(&b)
 		client := fakebucketclientset.NewSimpleClientset(&ba, &b)
+		kubeClient := fakekubeclientset.NewSimpleClientset()
 		mpc.GrantBucketAccess = tc.grantFunc
 		bal := bucketAccessListener{
 			provisionerName:    provisioner,
 			provisionerClient:  &mpc,
 			bucketAccessClient: client,
+			kubeClient:         kubeClient,
 		}
 
 		err := bal.Add(ctx, &ba)
 		if err != nil {
 			t.Errorf("add returned: %+v", err)
 		}
-		if ba.Status.AccessGranted != true {
+
+		updatedBA, _ := client.ObjectstorageV1alpha1().BucketAccesses().Get(ctx, ba.Name, metav1.GetOptions{})
+		if updatedBA.Status.AccessGranted != true {
 			t.Errorf("expected %t, got %t", true, ba.Status.AccessGranted)
+		}
+		if len(tc.principal) <= 0 {
+			if !strings.EqualFold(updatedBA.Spec.Principal, generatedPrincipal) {
+				t.Errorf("expected %s, got %s", generatedPrincipal, updatedBA.Spec.Principal)
+			}
+		}
+
+		secretName := generateSecretName(ba.UID)
+		secret, err := kubeClient.CoreV1().Secrets("objectstorage-system").Get(ctx, secretName, metav1.GetOptions{})
+		if len(tc.serviceAccount) > 0 {
+			if err == nil {
+				t.Errorf("secret should not have been created")
+			}
+		} else {
+			if secret.StringData["CredentialsFilePath"] != credsFile {
+				t.Errorf("expected %s, got %s", credsFile, secret.StringData["CredentialsFilePath"])
+			}
+			if secret.StringData["CredentialsFileContents"] != credsContents {
+				t.Errorf("expected %s, got %s", credsContents, secret.StringData["CredentialsFileContents"])
+			}
 		}
 	}
 }
@@ -284,16 +379,17 @@ func TestDelete(t *testing.T) {
 	sigVersion := v1alpha1.S3SignatureVersion(v1alpha1.S3SignatureVersionV2)
 	account := "account1"
 	keyName := "keyName1"
-	projId := "id1"
+	projID := "id1"
 	endpoint := "endpoint1"
 	instanceName := "instance"
 	mpc := struct{ fakespec.MockProvisionerClient }{}
 
 	testCases := []struct {
-		name         string
-		setProtocol  func(b *v1alpha1.Bucket)
-		protocolName v1alpha1.ProtocolName
-		revokeFunc   func(ctx context.Context, in *osspec.ProvisionerRevokeBucketAccessRequest, opts ...grpc.CallOption) (*osspec.ProvisionerRevokeBucketAccessResponse, error)
+		name           string
+		setProtocol    func(b *v1alpha1.Bucket)
+		protocolName   v1alpha1.ProtocolName
+		revokeFunc     func(ctx context.Context, in *osspec.ProvisionerRevokeBucketAccessRequest, opts ...grpc.CallOption) (*osspec.ProvisionerRevokeBucketAccessResponse, error)
+		serviceAccount string
 	}{
 		{
 			name: "S3",
@@ -328,6 +424,7 @@ func TestDelete(t *testing.T) {
 				}
 				return &osspec.ProvisionerRevokeBucketAccessResponse{}, nil
 			},
+			serviceAccount: "",
 		},
 		{
 			name: "GCS",
@@ -335,7 +432,7 @@ func TestDelete(t *testing.T) {
 				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{
 					ServiceAccount: account,
 					PrivateKeyName: keyName,
-					ProjectID:      projId,
+					ProjectID:      projID,
 					BucketName:     bucketName,
 				}
 			},
@@ -353,11 +450,12 @@ func TestDelete(t *testing.T) {
 				if in.BucketContext["PrivateKeyName"] != keyName {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["PrivateKeyName"])
 				}
-				if in.BucketContext["ProjectID"] != projId {
+				if in.BucketContext["ProjectID"] != projID {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["ProjectID"])
 				}
 				return &osspec.ProvisionerRevokeBucketAccessResponse{}, nil
 			},
+			serviceAccount: "",
 		},
 		{
 			name: "AzureBlob",
@@ -380,6 +478,42 @@ func TestDelete(t *testing.T) {
 				}
 				return &osspec.ProvisionerRevokeBucketAccessResponse{}, nil
 			},
+			serviceAccount: "",
+		},
+		{
+			name: "service account exists",
+			setProtocol: func(b *v1alpha1.Bucket) {
+				b.Spec.Protocol.S3 = &v1alpha1.S3Protocol{
+					Region:           region,
+					Version:          protocolVersion,
+					SignatureVersion: sigVersion,
+					BucketName:       bucketName,
+					Endpoint:         endpoint,
+				}
+			},
+			protocolName: v1alpha1.ProtocolNameS3,
+			revokeFunc: func(ctx context.Context, in *osspec.ProvisionerRevokeBucketAccessRequest, opts ...grpc.CallOption) (*osspec.ProvisionerRevokeBucketAccessResponse, error) {
+				if in.BucketName != bucketName {
+					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
+				}
+				if in.Region != region {
+					t.Errorf("expected %s, got %s", region, in.Region)
+				}
+				if in.Principal != principal {
+					t.Errorf("expected %s, got %s", principal, in.Principal)
+				}
+				if in.BucketContext["Version"] != protocolVersion {
+					t.Errorf("expected %s, got %s", protocolVersion, in.BucketContext["Version"])
+				}
+				if in.BucketContext["SignatureVersion"] != string(sigVersion) {
+					t.Errorf("expected %s, got %s", sigVersion, in.BucketContext["SignatureVersion"])
+				}
+				if in.BucketContext["Endpoint"] != endpoint {
+					t.Errorf("expected %s, got %s", endpoint, in.BucketContext["Endpoint"])
+				}
+				return &osspec.ProvisionerRevokeBucketAccessResponse{}, nil
+			},
+			serviceAccount: "serviceAccount",
 		},
 	}
 
@@ -403,25 +537,48 @@ func TestDelete(t *testing.T) {
 				BucketInstanceName: instanceName,
 				Provisioner:        provisioner,
 				Principal:          principal,
+				ServiceAccount:     tc.serviceAccount,
 			},
+			Status: v1alpha1.BucketAccessStatus{
+				AccessGranted: true,
+			},
+		}
+		secretName := generateSecretName(ba.UID)
+		secret := v1.Secret{
+			ObjectMeta: metav1.ObjectMeta{
+				Name:      secretName,
+				Namespace: "objectstorage-system",
+			},
+			Type: v1.SecretTypeOpaque,
 		}
 
 		ctx := context.TODO()
 		tc.setProtocol(&b)
 		client := fakebucketclientset.NewSimpleClientset(&ba, &b)
+		kubeClient := fakekubeclientset.NewSimpleClientset(&secret)
 		mpc.RevokeBucketAccess = tc.revokeFunc
 		bal := bucketAccessListener{
 			provisionerName:    provisioner,
 			provisionerClient:  &mpc,
 			bucketAccessClient: client,
+			kubeClient:         kubeClient,
 		}
 
 		err := bal.Delete(ctx, &ba)
 		if err != nil {
 			t.Errorf("delete returned: %+v", err)
 		}
-		if ba.Status.AccessGranted != false {
-			t.Errorf("expected %t, got %t", true, ba.Status.AccessGranted)
+
+		updatedBA, _ := client.ObjectstorageV1alpha1().BucketAccesses().Get(ctx, ba.Name, metav1.GetOptions{})
+		if updatedBA.Status.AccessGranted != false {
+			t.Errorf("expected %t, got %t", false, ba.Status.AccessGranted)
+		}
+
+		_, err = kubeClient.CoreV1().Secrets("objectstorage-system").Get(ctx, secretName, metav1.GetOptions{})
+		if len(tc.serviceAccount) == 0 {
+			if err == nil {
+				t.Errorf("secret should not exist")
+			}
 		}
 	}
 }

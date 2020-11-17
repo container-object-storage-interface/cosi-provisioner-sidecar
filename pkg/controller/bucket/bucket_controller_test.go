@@ -28,6 +28,7 @@ import (
 	osspec "github.com/container-object-storage-interface/spec"
 	fakespec "github.com/container-object-storage-interface/spec/fake"
 
+	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	utilversion "k8s.io/apimachinery/pkg/util/version"
 	"k8s.io/apimachinery/pkg/version"
 
@@ -106,7 +107,7 @@ func TestAddValidProtocols(t *testing.T) {
 	sigVersion := v1alpha1.S3SignatureVersion(v1alpha1.S3SignatureVersionV2)
 	account := "account1"
 	keyName := "keyName1"
-	projId := "id1"
+	projID := "id1"
 	anonAccess := "BUCKET_PRIVATE"
 	mpc := struct{ fakespec.MockProvisionerClient }{}
 
@@ -150,7 +151,7 @@ func TestAddValidProtocols(t *testing.T) {
 				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{
 					ServiceAccount: account,
 					PrivateKeyName: keyName,
-					ProjectID:      projId,
+					ProjectID:      projID,
 				}
 			},
 			protocolName: v1alpha1.ProtocolNameGCS,
@@ -164,7 +165,7 @@ func TestAddValidProtocols(t *testing.T) {
 				if in.BucketContext["PrivateKeyName"] != keyName {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["PrivateKeyName"])
 				}
-				if in.BucketContext["ProjectID"] != projId {
+				if in.BucketContext["ProjectID"] != projID {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["ProjectID"])
 				}
 				return &osspec.ProvisionerCreateBucketResponse{}, nil
@@ -212,36 +213,16 @@ func TestAddValidProtocols(t *testing.T) {
 				return &osspec.ProvisionerCreateBucketResponse{}, nil
 			},
 			params: map[string]string{
-				"BucketInstanceName":  bucketName,
 				"AnonymousAccessMode": anonAccess,
 			},
-		},
-		{
-			name: "BucketPrefix",
-			setProtocol: func(b *v1alpha1.Bucket) {
-				b.Spec.Protocol.AzureBlob = &v1alpha1.AzureProtocol{
-					StorageAccount: account,
-				}
-			},
-			protocolName: v1alpha1.ProtocolNameAzure,
-			createFunc: func(ctx context.Context, in *osspec.ProvisionerCreateBucketRequest, opts ...grpc.CallOption) (*osspec.ProvisionerCreateBucketResponse, error) {
-				if in.BucketName != "" {
-					t.Errorf("expected %s, got %s", bucketName, in.BucketName)
-				}
-				if in.BucketContext["BucketPrefix"] != bucketName {
-					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
-				}
-				if in.BucketContext["StorageAccount"] != account {
-					t.Errorf("expected %s, got %s", region, in.BucketContext["StorageAccount"])
-				}
-				return &osspec.ProvisionerCreateBucketResponse{}, nil
-			},
-			params: map[string]string{"BucketPrefix": bucketName},
 		},
 	}
 
 	for _, tc := range testCases {
 		b := v1alpha1.Bucket{
+			ObjectMeta: metav1.ObjectMeta{
+				Name: bucketName,
+			},
 			Spec: v1alpha1.BucketSpec{
 				Provisioner: provisioner,
 				Protocol: v1alpha1.Protocol{
@@ -255,11 +236,13 @@ func TestAddValidProtocols(t *testing.T) {
 
 		ctx := context.TODO()
 		client := fakebucketclientset.NewSimpleClientset(&b)
+		kubeClient := fakekubeclientset.NewSimpleClientset()
 		mpc.CreateBucket = tc.createFunc
 		bl := bucketListener{
 			provisionerName:   provisioner,
 			provisionerClient: &mpc,
 			bucketClient:      client,
+			kubeClient:        kubeClient,
 		}
 
 		tc.setProtocol(&b)
@@ -268,7 +251,9 @@ func TestAddValidProtocols(t *testing.T) {
 		if err != nil {
 			t.Errorf("add returned: %+v", err)
 		}
-		if b.Status.BucketAvailable != true {
+
+		updatedB, _ := client.ObjectstorageV1alpha1().Buckets().Get(ctx, b.Name, metav1.GetOptions{})
+		if updatedB.Status.BucketAvailable != true {
 			t.Errorf("expected %t, got %t", true, b.Status.BucketAvailable)
 		}
 	}
@@ -340,7 +325,7 @@ func TestDeleteValidProtocols(t *testing.T) {
 	sigVersion := v1alpha1.S3SignatureVersion(v1alpha1.S3SignatureVersionV2)
 	account := "account1"
 	keyName := "keyName1"
-	projId := "id1"
+	projID := "id1"
 	endpoint := "endpoint1"
 	mpc := struct{ fakespec.MockProvisionerClient }{}
 
@@ -387,7 +372,7 @@ func TestDeleteValidProtocols(t *testing.T) {
 				b.Spec.Protocol.GCS = &v1alpha1.GCSProtocol{
 					ServiceAccount: account,
 					PrivateKeyName: keyName,
-					ProjectID:      projId,
+					ProjectID:      projID,
 					BucketName:     bucketName,
 				}
 			},
@@ -402,7 +387,7 @@ func TestDeleteValidProtocols(t *testing.T) {
 				if in.BucketContext["PrivateKeyName"] != keyName {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["PrivateKeyName"])
 				}
-				if in.BucketContext["ProjectID"] != projId {
+				if in.BucketContext["ProjectID"] != projID {
 					t.Errorf("expected %s, got %s", region, in.BucketContext["ProjectID"])
 				}
 				return &osspec.ProvisionerDeleteBucketResponse{}, nil
@@ -439,6 +424,9 @@ func TestDeleteValidProtocols(t *testing.T) {
 					},
 				},
 			},
+			Status: v1alpha1.BucketStatus{
+				BucketAvailable: true,
+			},
 		}
 
 		ctx := context.TODO()
@@ -455,6 +443,11 @@ func TestDeleteValidProtocols(t *testing.T) {
 		err := bl.Delete(ctx, &b)
 		if err != nil {
 			t.Errorf("delete returned: %+v", err)
+		}
+
+		updatedB, _ := client.ObjectstorageV1alpha1().Buckets().Get(ctx, b.Name, metav1.GetOptions{})
+		if updatedB.Status.BucketAvailable != false {
+			t.Errorf("expected %t, got %t", false, b.Status.BucketAvailable)
 		}
 	}
 }
